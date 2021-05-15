@@ -1,11 +1,14 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:mapd_demo/VrPage.dart';
 import 'package:mapd_demo/addNewPlace.dart';
+import 'package:mapd_demo/inputForm.dart';
 
 import 'home.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  Firebase.initializeApp();
   runApp(MyApp());
 }
 
@@ -34,7 +37,7 @@ class MyApp extends StatelessWidget {
         // When navigating to the "/" route, build the FirstScreen widget.
         '/': (context) => MyHomePage(title: 'Main Activity'),
         '/VRpage':(context) =>  VrPage(),
-        '/addNew':(context) => AddNewPlace(),
+        '/addNew':(context) => WizardForm(),
 
       },
 

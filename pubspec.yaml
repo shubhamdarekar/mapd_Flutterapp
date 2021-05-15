@@ -33,6 +33,13 @@ dependencies:
   panorama: ^0.4.1
   http: ^0.13.3
 
+  ##form dependencies
+  flutter_form_bloc: ^0.20.0
+  multi_image_picker: ^4.8.00
+  firebase_core: ^1.1.1
+  cloud_firestore: ^2.1.0
+  firebase_storage: ^8.0.6
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

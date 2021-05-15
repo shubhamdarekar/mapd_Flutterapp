@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -28,12 +27,12 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
 
   Completer<GoogleMapController> _controller = Completer();
   GoogleMapController mapController;
   LocationData currentLocation;
   LatLng _center = new LatLng(19.053033, 72.890933);
+  var locationSubscription;
 
   bool _popUpVisibility;
   String _placeName;
@@ -45,6 +44,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void _onMapCreated(GoogleMapController controller) {
     _controller.complete(controller);
   }
+
 
   _getNearbyPlaces(var lat, var lon) async{
     var host = "192.168.0.10:8000";
@@ -71,7 +71,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  _getLocation() async {
+  getLocation() async {
     var location = new Location();
 
     bool _serviceEnabled;
@@ -94,15 +94,13 @@ class _MyHomePageState extends State<MyHomePage> {
     }
     try {
       mapController = await _controller.future;
-      location.onLocationChanged.listen((l) {
+      locationSubscription = location.onLocationChanged.listen((l) {
         if(markers.isEmpty){
           mapController.animateCamera(
             CameraUpdate.newCameraPosition(
               CameraPosition(target: LatLng(l.latitude, l.longitude), zoom: 18),
             ),
           );
-
-          //TODO api call
           _getNearbyPlaces(l.latitude, l.longitude);
         }
       });
@@ -145,7 +143,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     // TODO: implement initState
-    _getLocation();
+    getLocation();
     _popUpVisibility=false;
     _placeId="-1";
     _placeName="";

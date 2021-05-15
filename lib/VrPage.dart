@@ -1,10 +1,15 @@
 import 'dart:async';
+import 'dart:collection';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'package:mapd_demo/arguments.dart';
 import 'package:panorama/panorama.dart';
+import 'package:http/http.dart' as http;
+
 
 class VrPage extends StatefulWidget {
   VrPage({Key key}) : super(key: key);
@@ -17,11 +22,36 @@ class VrPage extends StatefulWidget {
 
 class _VrPageState extends State<VrPage> {
   bool _showGoogleMaps = false;
+  Completer<GoogleMapController> _controller = Completer();
+  GoogleMapController mapController;
+  LocationData currentLocation;
+  LatLng _center;
+
+  static const platform = const MethodChannel('wificustom');
+  Timer timer;
+  String indoorPosition='Calculating...';
 
   @override
   void initState() {
     _getLocation();
     super.initState();
+    _getAllWifi();
+    timer = Timer.periodic(Duration(seconds: 10), (Timer t) async {
+      var list = await _getAllWifi();
+      var host = "192.168.0.10:8000";
+      var path = 'apis/getLoc/';
+      var queryParameters = {'name':'hii'};
+      for(var i=1; i<list.values.first.length;i++){
+        print(list.values.first[i]);
+        queryParameters[list.values.first[i][0]] = list.values.first[i][2].toString();
+      }
+      var response = await http.get(Uri.http(host, path, queryParameters ));
+      print(response.body);
+      setState(() {
+        indoorPosition = response.body;
+      });
+
+    });
 
     Future.delayed(const Duration(milliseconds: 2000), () {
       print("loading");
@@ -31,10 +61,20 @@ class _VrPageState extends State<VrPage> {
     });
   }
 
-  Completer<GoogleMapController> _controller = Completer();
-  GoogleMapController mapController;
-  LocationData currentLocation;
-  LatLng _center ;
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  Future<LinkedHashMap> _getAllWifi() async {
+    try {
+      var x = await platform.invokeMethod('getAllWifi');
+      return x;
+    } on PlatformException catch (e) {
+      print("Failed to get Wifi data: '${e.message}'.");
+    }
+  }
 
   void _onMapCreated(GoogleMapController controller) {
     _controller.complete(controller);
@@ -64,7 +104,6 @@ class _VrPageState extends State<VrPage> {
     try {
       mapController = await _controller.future;
       location.onLocationChanged.listen((l) {
-
         mapController.animateCamera(
           CameraUpdate.newCameraPosition(
             CameraPosition(target: LatLng(l.latitude, l.longitude), zoom: 18),
@@ -86,15 +125,35 @@ class _VrPageState extends State<VrPage> {
 
   @override
   Widget build(BuildContext context) {
-    final VrPageArguments args = ModalRoute.of(context).settings.arguments as VrPageArguments;
+    final VrPageArguments args =
+        ModalRoute.of(context).settings.arguments as VrPageArguments;
     setState(() {
       _center = args.latLng;
     });
 
     return Scaffold(
       appBar: AppBar(
-        title: Hero(child: Text(args.name),tag:'place'),
+        title: Hero(child: Text(args.name), tag: 'place'),
         centerTitle: true,
+      ),
+      floatingActionButton: FloatingActionButton(
+        child: Icon(Icons.location_on),
+        onPressed: () async {
+          var list = await _getAllWifi();
+          var host = "192.168.0.10:8000";
+          var path = 'apis/getLoc/';
+          var queryParameters = {'name':'hii'};
+          for(var i=1; i<list.values.first.length;i++){
+            print(list.values.first[i]);
+            queryParameters[list.values.first[i][0]] = list.values.first[i][2].toString();
+          }
+          var response = await http.get(Uri.http(host, path, queryParameters ));
+          setState(() {
+            indoorPosition = response.body;
+          });
+          print(response.body);
+
+        },
       ),
       body: Container(
         child: Stack(
@@ -102,57 +161,65 @@ class _VrPageState extends State<VrPage> {
             Panorama(
               zoom: 1,
               sensitivity: 3,
-              child: Image.asset('assets/images/2.jpg'),
+              child: Image.asset('assets/images/3.jpg'),
             ),
             Align(
                 alignment: Alignment.topRight,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(0,20,20,10),
+                  padding: const EdgeInsets.fromLTRB(0, 20, 20, 10),
                   child: Container(
                     decoration: BoxDecoration(
-                      boxShadow: [BoxShadow(
-                        color: Colors.grey,
-                        blurRadius: 5.0,
-                      ),],
-                        border: Border.all(color: Theme.of(context).primaryColor, width: 2)
-                    ),
-                    width:150,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey,
+                            blurRadius: 5.0,
+                          ),
+                        ],
+                        border: Border.all(
+                            color: Theme.of(context).primaryColor, width: 2)),
+                    width: 150,
                     height: 150,
-                    child: _showGoogleMaps? GoogleMap(
-                      onMapCreated: _onMapCreated,
-                      myLocationEnabled: true,
-                      myLocationButtonEnabled: false,
-                      zoomControlsEnabled: false,
-                      zoomGesturesEnabled: false,
-                      rotateGesturesEnabled: false,
-                      scrollGesturesEnabled: false,
-                      tiltGesturesEnabled: false,
-                      initialCameraPosition: CameraPosition(
-                        target: _center,
-                        zoom: 10.0,
-                      ),
-                    ):Center(child: Text("loading...")),
+                    child: _showGoogleMaps
+                        ? GoogleMap(
+                            onMapCreated: _onMapCreated,
+                            myLocationEnabled: true,
+                            myLocationButtonEnabled: false,
+                            zoomControlsEnabled: false,
+                            zoomGesturesEnabled: false,
+                            rotateGesturesEnabled: false,
+                            scrollGesturesEnabled: false,
+                            tiltGesturesEnabled: false,
+                            initialCameraPosition: CameraPosition(
+                              target: _center,
+                              zoom: 10.0,
+                            ),
+                          )
+                        : Center(child: Text("loading...")),
                   ),
-                )
-            ),
+                )),
             DraggableScrollableSheet(
               initialChildSize: 0.1,
               minChildSize: 0.08,
               maxChildSize: 0.8,
-              builder: (BuildContext context, ScrollController scrollController) {
+              builder:
+                  (BuildContext context, ScrollController scrollController) {
                 return Container(
-                    decoration: new BoxDecoration(
-                      borderRadius: new BorderRadius.circular(15.0),
-                      color: Colors.brown,
-                    ),
+                  decoration: new BoxDecoration(
+                    borderRadius: new BorderRadius.circular(15.0),
+                    color: Colors.white,
+                  ),
                   child: ListView(
                     controller: scrollController,
                     children: [
-                      SizedBox(height: 10,width: 10,),
+                      SizedBox(
+                        height: 10,
+                        width: 10,
+                      ),
                       new Container(
-                        width:10,
+                        width: 10,
                         height: 5,
-                        margin: EdgeInsets.symmetric(vertical: 0,horizontal: 70),
+                        margin:
+                            EdgeInsets.symmetric(vertical: 0, horizontal: 70),
                         decoration: new BoxDecoration(
                           borderRadius: new BorderRadius.circular(10.0),
                           color: Colors.grey,
@@ -164,8 +231,14 @@ class _VrPageState extends State<VrPage> {
                           ],
                         ),
                       ),
-                      SizedBox(height: 50,),
-                      Image.asset('assets/images/materialized-view.png'),
+                      SizedBox(
+                        height: 25,
+                      ),
+                      Center(child: Text("Indoor Position block:"+indoorPosition)),
+                      SizedBox(
+                        height: 25,
+                      ),
+                      Image.asset('assets/images/Indoor map.jpg'),
                     ],
                   ),
                 );
