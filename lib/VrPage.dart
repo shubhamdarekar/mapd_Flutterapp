@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +8,10 @@ import 'package:location/location.dart';
 import 'package:mapd_demo/arguments.dart';
 import 'package:panorama/panorama.dart';
 import 'package:http/http.dart' as http;
+import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
+
+import 'locationCalibrate.dart';
+
 
 
 class VrPage extends StatefulWidget {
@@ -26,10 +29,14 @@ class _VrPageState extends State<VrPage> {
   GoogleMapController mapController;
   LocationData currentLocation;
   LatLng _center;
+  String placeId;
 
   static const platform = const MethodChannel('wificustom');
   Timer timer;
   String indoorPosition='Calculating...';
+
+  String panaromaUrl='';
+  String mapUrl='';
 
   @override
   void initState() {
@@ -42,17 +49,16 @@ class _VrPageState extends State<VrPage> {
       var path = 'apis/getLoc/';
       var queryParameters = {'name':'hii'};
       for(var i=1; i<list.values.first.length;i++){
-        print(list.values.first[i]);
+        // print(list.values.first[i]);
         queryParameters[list.values.first[i][0]] = list.values.first[i][2].toString();
       }
       var response = await http.get(Uri.http(host, path, queryParameters ));
-      print(response.body);
+      // print(response.body);
       setState(() {
         indoorPosition = response.body;
       });
 
     });
-
     Future.delayed(const Duration(milliseconds: 2000), () {
       print("loading");
       setState(() {
@@ -65,6 +71,18 @@ class _VrPageState extends State<VrPage> {
   void dispose() {
     timer?.cancel();
     super.dispose();
+  }
+
+  _getImages() async{
+    firebase_storage.FirebaseStorage storage =
+        firebase_storage.FirebaseStorage.instance;
+    var url = (await storage.ref().child("stitched/"+placeId).getDownloadURL()).toString();
+    var url2 = (await storage.ref().child("maps/"+placeId).getDownloadURL()).toString();
+
+    setState(() {
+      panaromaUrl = url;
+      mapUrl = url2;
+    });
   }
 
   Future<LinkedHashMap> _getAllWifi() async {
@@ -129,7 +147,10 @@ class _VrPageState extends State<VrPage> {
         ModalRoute.of(context).settings.arguments as VrPageArguments;
     setState(() {
       _center = args.latLng;
+      placeId = args.id;
     });
+    
+    _getImages();
 
     return Scaffold(
       appBar: AppBar(
@@ -142,7 +163,7 @@ class _VrPageState extends State<VrPage> {
           var list = await _getAllWifi();
           var host = "192.168.0.10:8000";
           var path = 'apis/getLoc/';
-          var queryParameters = {'name':'hii'};
+          var queryParameters = {};
           for(var i=1; i<list.values.first.length;i++){
             print(list.values.first[i]);
             queryParameters[list.values.first[i][0]] = list.values.first[i][2].toString();
@@ -151,7 +172,7 @@ class _VrPageState extends State<VrPage> {
           setState(() {
             indoorPosition = response.body;
           });
-          print(response.body);
+          // print(response.body);
 
         },
       ),
@@ -161,7 +182,35 @@ class _VrPageState extends State<VrPage> {
             Panorama(
               zoom: 1,
               sensitivity: 3,
-              child: Image.asset('assets/images/3.jpg'),
+              child: Image.network(panaromaUrl,
+                loadingBuilder: (BuildContext ctx, Widget child, ImageChunkEvent loadingProgress) {
+                  if (loadingProgress == null) {
+                    return child;
+                  }else {
+                    return Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                      ),
+                    );
+                  }
+                },
+              )
+              // Image.asset('assets/images/3.jpg'),
+            ),
+            Align(
+              alignment: Alignment.topLeft,
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: FloatingActionButton(
+                  child: Icon(Icons.settings),
+                  onPressed: (){
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => LocationCalibration(id: placeId)),
+                    );
+                  },
+                ),
+              ),
             ),
             Align(
                 alignment: Alignment.topRight,
@@ -238,7 +287,19 @@ class _VrPageState extends State<VrPage> {
                       SizedBox(
                         height: 25,
                       ),
-                      Image.asset('assets/images/Indoor map.jpg'),
+                      Image.network(mapUrl,
+                        loadingBuilder: (BuildContext ctx, Widget child, ImageChunkEvent loadingProgress) {
+                          if (loadingProgress == null) {
+                            return child;
+                          }else {
+                            return Center(
+                              child: CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                              ),
+                            );
+                          }
+                        },
+                      ),
                     ],
                   ),
                 );

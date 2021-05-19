@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,10 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:mapd_demo/arguments.dart';
 import 'package:multi_image_picker/multi_image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
+import 'package:http/http.dart' as http;
+
+import 'locationCalibrate.dart';
+
 
 class WizardFormBloc extends FormBloc<String, String> {
   final latitude = TextFieldBloc(
@@ -24,14 +29,18 @@ class WizardFormBloc extends FormBloc<String, String> {
 
   final photoList = TextFieldBloc(
     validators: [FieldBlocValidators.required],
+    initialValue: "Shubham"
   );
 
   final mapPhoto = TextFieldBloc(
     validators: [FieldBlocValidators.required],
+      initialValue: "Shubham"
+
   );
 
   List<Asset> images = [];
   List<Asset> map = [];
+  String placeId = '';
 
   FirebaseFirestore firestore = FirebaseFirestore.instance;
   firebase_storage.FirebaseStorage storage =
@@ -52,6 +61,16 @@ class WizardFormBloc extends FormBloc<String, String> {
     );
   }
 
+  _callStitching(id) async{
+    var host = "192.168.0.10:8000";
+    var path = 'apis/stitchImage/';
+    var queryParameters = {
+      'id':id
+    };
+    var response = await http.get(Uri.http(host, path, queryParameters));
+    var x = json.decode(response.body);
+    print(x);
+  }
 
   @override
   void onSubmitting() async {
@@ -81,7 +100,8 @@ class WizardFormBloc extends FormBloc<String, String> {
         'imageListLength':images.length,
         'map':map.length
       }).then((value)  async{
-        print(value.id);
+        // print(value.id);
+        placeId = value.id;
         for(var i =0;i<images.length;i++){
           ByteData byteData = await images[i].getByteData();
           List<int> imageData = byteData.buffer.asUint8List();
@@ -92,6 +112,7 @@ class WizardFormBloc extends FormBloc<String, String> {
         List<int> imageData = byteData.buffer.asUint8List();
         await storage.ref('maps/'+value.id)
             .putData(imageData);
+        _callStitching(value.id);
         emitSuccess();
       }).catchError((){
         emitFailure();
@@ -207,7 +228,7 @@ class _WizardFormState extends State<WizardForm> {
 
                     if (state.stepCompleted == state.lastStep) {
                       Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => SuccessScreen()));
+                          MaterialPageRoute(builder: (_) => SuccessScreen(id:context.read<WizardFormBloc>().placeId )));
                     }
                   },
                   onFailure: (context, state) {
@@ -404,7 +425,8 @@ class LoadingDialog extends StatelessWidget {
 }
 
 class SuccessScreen extends StatelessWidget {
-  SuccessScreen({Key key}) : super(key: key);
+  String id;
+  SuccessScreen({Key key, this.id}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -424,7 +446,7 @@ class SuccessScreen extends StatelessWidget {
             RaisedButton.icon(
               onPressed: () =>Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => MyApp()),
+                MaterialPageRoute(builder: (context) => LocationCalibration(id: id)),
               ),
               icon: Icon(Icons.replay),
               label: Text('Start Caliberating'),
@@ -436,150 +458,3 @@ class SuccessScreen extends StatelessWidget {
   }
 }
 
-
-class MyApp extends StatefulWidget {
-  @override
-  _MyAppState createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  String _platformVersion = "";
-  List _allWifi;
-  final TextEditingController _aText = TextEditingController();
-  final TextEditingController _bText = TextEditingController();
-  FirebaseFirestore firestore = FirebaseFirestore.instance;
-
-  @override
-  void initState() {
-    super.initState();
-    _allWifi = [];
-  }
-
-  static const platform = const MethodChannel('wificustom');
-
-  Future<LinkedHashMap> _getAllWifi() async {
-    List allWifi;
-    try {
-      var x = await platform.invokeMethod('getAllWifi');
-      return x;
-    } on PlatformException catch (e) {
-      print("Failed to get battery level: '${e.message}'.");
-    }
-
-    setState(() {
-      _allWifi = allWifi;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-        appBar: AppBar(
-          title: const Text('Positioning Entry'),
-        ),
-        body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Text("A:"),
-                      ),
-                      Container(
-                          width: 150,
-                          child: TextField(
-                            decoration:
-                            const InputDecoration(border: OutlineInputBorder()),
-                            controller: _aText,
-                          )),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Text("B:"),
-                      ),
-                      Container(
-                          width: 150,
-                          child: TextField(
-                            decoration:
-                            const InputDecoration(border: OutlineInputBorder()),
-                            controller: _bText,
-                          )),
-                    ],
-                  ),
-                ),
-                Text("Results :"),
-                Expanded(
-                  child: ListView.builder(
-                      itemCount: _allWifi.length,
-                      itemBuilder: (context, index) {
-                        return ListTile(
-                          title: Text(_allWifi[index].toString()),
-                        );
-                      }),
-                ),
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Padding(
-                    padding: const EdgeInsets.all(35.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ElevatedButton(
-                          child: Text("Add To Database"),
-                          onPressed: () async {
-                            var list = await _getAllWifi();
-
-                            list.putIfAbsent("a", () => _aText.text);
-                            list.putIfAbsent("b", () => _bText.text);
-                            await _addToFirebase(list);
-                            setState(() {
-                              _allWifi.add(list);
-                            });
-                          },
-                        ),
-                        SizedBox(width: 10),
-                        ElevatedButton(
-                          child: Text("Clear Page"),
-                          onPressed: () {
-                            setState(() {
-                              _allWifi.clear();
-                            });
-                          },
-                        ),
-                        ElevatedButton(
-                          child: Text("Done"),
-                          onPressed: () {
-                            setState(() {
-                              Navigator.popUntil(context, ModalRoute.withName('/'));
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              ],
-            )),
-      );
-  }
-
-  _addToFirebase(LinkedHashMap list) async{
-    CollectionReference data = firestore.collection('locData');
-    var batch = firestore.batch();
-    data.add({
-      "a": list['a'],
-      "b": list['b'],
-      "location": list['Location']
-    }).then((value) {
-      for(var wifi in list['Wifi']){
-        var docRef = firestore.doc(value.path).collection("wifi").doc();
-        batch.set(docRef, {"wifi":wifi});
-      }
-
-    }).catchError((error) => print("Failed to add data: $error"));
-  }
-}

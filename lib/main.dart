@@ -1,7 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:mapd_demo/VrPage.dart';
-import 'package:mapd_demo/addNewPlace.dart';
 import 'package:mapd_demo/inputForm.dart';
 
 import 'home.dart';

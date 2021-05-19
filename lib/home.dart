@@ -7,7 +7,6 @@ import 'package:location/location.dart';
 import 'package:mapd_demo/arguments.dart';
 import 'package:http/http.dart' as http;
 
-
 class MyHomePage extends StatefulWidget {
   MyHomePage({Key key, this.title}) : super(key: key);
 
@@ -27,7 +26,6 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-
   Completer<GoogleMapController> _controller = Completer();
   GoogleMapController mapController;
   LocationData currentLocation;
@@ -37,7 +35,7 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _popUpVisibility;
   String _placeName;
   String _placeId;
-
+  var placeList = [];
 
   Map<MarkerId, Marker> markers = <MarkerId, Marker>{};
 
@@ -45,25 +43,26 @@ class _MyHomePageState extends State<MyHomePage> {
     _controller.complete(controller);
   }
 
-
-  _getNearbyPlaces(var lat, var lon) async{
+  _getNearbyPlaces(var lat, var lon) async {
     var host = "192.168.0.10:8000";
     var path = 'apis/getNearest/';
     var queryParameters = {
       'latitude': lat.toString(),
       'longitude': lon.toString()
     };
-    var response = await http.get(Uri.http(host, path, queryParameters ));
+    var response = await http.get(Uri.http(host, path, queryParameters));
     var x = json.decode(response.body);
 
-    if(x['res'] == 'true'){
+    if (x['res'] == 'true') {
       setState(() {
-        _placeId = x['id'];
-        _placeName = x['name'];
+        placeList = x['list'];
+        _placeId = '';
+        _placeName = '';
         _popUpVisibility = true;
       });
-    }else{
+    } else {
       setState(() {
+        placeList = [];
         _placeId = '-1';
         _placeName = '';
         _popUpVisibility = false;
@@ -95,7 +94,7 @@ class _MyHomePageState extends State<MyHomePage> {
     try {
       mapController = await _controller.future;
       locationSubscription = location.onLocationChanged.listen((l) {
-        if(markers.isEmpty){
+        if (markers.isEmpty) {
           mapController.animateCamera(
             CameraUpdate.newCameraPosition(
               CameraPosition(target: LatLng(l.latitude, l.longitude), zoom: 18),
@@ -123,7 +122,8 @@ class _MyHomePageState extends State<MyHomePage> {
       Marker marker = Marker(
         markerId: markerId,
         draggable: true,
-        position: latlang, //With this parameter you automatically obtain latitude and longitude
+        position:
+            latlang, //With this parameter you automatically obtain latitude and longitude
         infoWindow: InfoWindow(
           title: "Marker here",
           snippet: 'This looks good',
@@ -132,7 +132,7 @@ class _MyHomePageState extends State<MyHomePage> {
       );
 
       markers[markerId] = marker;
-      _popUpVisibility=false;
+      _popUpVisibility = false;
     });
     mapController = await _controller.future;
 
@@ -144,9 +144,9 @@ class _MyHomePageState extends State<MyHomePage> {
   void initState() {
     // TODO: implement initState
     getLocation();
-    _popUpVisibility=false;
-    _placeId="-1";
-    _placeName="";
+    _popUpVisibility = false;
+    _placeId = "-1";
+    _placeName = "";
     super.initState();
   }
 
@@ -160,17 +160,23 @@ class _MyHomePageState extends State<MyHomePage> {
     // than having to individually change instances of widgets.
     return Scaffold(
       floatingActionButton: Padding(
-        padding: _popUpVisibility? EdgeInsets.fromLTRB(0, 0, 0, 180):EdgeInsets.fromLTRB(0, 0, 0, 0),
+        padding: _popUpVisibility
+            ? EdgeInsets.fromLTRB(0, 0, 0, 275)
+            : EdgeInsets.fromLTRB(0, 0, 0, 0),
         child: FloatingActionButton.extended(
           onPressed: () {
-            Navigator.pushNamed(context, '/addNew', arguments: AddNewPlaceArguments(_center));
+            Navigator.pushNamed(context, '/addNew',
+                arguments: AddNewPlaceArguments(markers.isEmpty ? _center: markers.values.first.position));
           },
           icon: Icon(Icons.add),
           // foregroundColor: Theme.of(context).accentColor,
           backgroundColor: Theme.of(context).primaryColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16.0))),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(16.0))),
           heroTag: "addPlace",
-          label: markers.isEmpty?Text("Add new place at your current location"):Text("Add new place at Marker"),
+          label: markers.isEmpty
+              ? Text("Add new place at your current location")
+              : Text("Add new place at Marker"),
         ),
       ),
       body: Container(
@@ -193,14 +199,15 @@ class _MyHomePageState extends State<MyHomePage> {
                 compassEnabled: true,
                 zoomControlsEnabled: false,
                 markers: Set<Marker>.of(markers.values),
-                onTap: (latlong){
+                onTap: (latlong) {
                   setState(() {
                     markers = <MarkerId, Marker>{};
                   });
                 },
-                onLongPress: (latlong){
+                onLongPress: (latlong) {
                   _addMarkerLongPressed(latlong);
                   _getNearbyPlaces(latlong.latitude, latlong.longitude);
+                  _center = latlong;
                 },
                 initialCameraPosition: CameraPosition(
                   target: _center,
@@ -214,58 +221,81 @@ class _MyHomePageState extends State<MyHomePage> {
             child: new Align(
               alignment: Alignment.bottomCenter,
               child: Container(
-                width: 450,
-                // color: Colors.red,
-                // padding: EdgeInsets.all(8),
-                child: Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15.0),
-                  ),
-                  color: Colors.white,
-                  elevation: 10,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 15, 8, 20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        SizedBox(height: 10,),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            SizedBox(width:32),
-                            Text('Nearby Structures'),
-                            IconButton(icon: Icon(Icons.cancel_outlined), onPressed: (){
-                              setState(() {
-                                _popUpVisibility = false;
-                              });
-                            }, iconSize: 32,)
-                          ],
-                        ),
-                        SizedBox(height: 10,),
-                        Hero(
-                          tag:'place',
-                          child: Material(
-                            color: Colors.grey,
-                            child: InkWell(
-                              splashColor: Theme.of(context).accentColor,
-                              onTap: () {
-                                Navigator.pushNamed(context, '/VRpage', arguments: VrPageArguments(_placeName, _placeId, _center));
+                  width: 450,
+                  // color: Colors.red,
+                  // padding: EdgeInsets.all(8),
+                  child: Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15.0),
+                    ),
+                    color: Colors.white,
+                    elevation: 10,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 15, 8, 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          SizedBox(
+                            height: 10,
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              SizedBox(width: 32),
+                              Text('Nearby Structures'),
+                              IconButton(
+                                icon: Icon(Icons.cancel_outlined),
+                                onPressed: () {
+                                  setState(() {
+                                    _popUpVisibility = false;
+                                  });
+                                },
+                                iconSize: 32,
+                              )
+                            ],
+                          ),
+                          SizedBox(
+                            height: 10,
+                          ),
+                          SizedBox(
+                            height: 150,
+                            child: ListView.builder(
+                              padding: EdgeInsets.all(0),
+                              itemCount: placeList.length,
+                              itemBuilder: (context, index) {
+                                return Material(
+                                  color: Colors.grey,
+                                  child: InkWell(
+                                    splashColor:
+                                    Theme.of(context).accentColor,
+                                    onTap: () {
+                                      Navigator.pushNamed(context, '/VRpage',
+                                          arguments: VrPageArguments(
+                                              placeList[index]['name'],placeList[index]['id'], _center));
+                                    },
+                                    child: ListTile(
+                                      trailing: Text(
+                                          placeList[index]['distance'].toStringAsFixed(2)+"m"
+                                      ),
+                                      leading:
+                                      Icon(Icons.location_on, size: 50, color: Colors.red,),
+                                      title: Text(placeList[index]['name'],
+                                          style:
+                                          TextStyle(color: Colors.white)),
+                                      subtitle: Text(
+                                          "("+placeList[index]['latitude']+", "+placeList[index]['longitude']+")",
+                                          style:
+                                          TextStyle(color: Colors.white)),
+                                    ),
+                                  ),
+                                );
                               },
-                              child: ListTile(
-                                leading: Icon(Icons.looks_one, size: 60),
-                                title: Text(_placeName,
-                                    style: TextStyle(color: Colors.white)),
-                                subtitle: Text(_placeId,
-                                    style: TextStyle(color: Colors.white)),
-                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                )
-              ),
+                  )),
             ),
           ),
         ]),
